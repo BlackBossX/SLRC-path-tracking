@@ -3,26 +3,6 @@ import cv2
 import numpy as np
 
 
-def identify_shape(contour):
-    perimeter = cv2.arcLength(contour, True)
-    approx = cv2.approxPolyDP(contour, 0.04 * perimeter, True)
-    vertices = len(approx)
-
-    if vertices == 3:
-        return "Triangle"
-    if vertices == 4:
-        x, y, w, h = cv2.boundingRect(approx)
-        if h == 0:
-            return "Rectangle"
-        aspect_ratio = w / float(h)
-        if 0.95 <= aspect_ratio <= 1.05:
-            return "Square"
-        return "Rectangle"
-    if vertices > 4:
-        return "Circle"
-    return "Object"
-
-
 picam2 = Picamera2()
 picam2.configure(picam2.create_preview_configuration(main={"size": (640, 480)}))
 picam2.start()
@@ -32,7 +12,15 @@ BASE_RPM = 100
 KP = 0.5  # Proportional control constant
 
 while True:
+    # capture_array() returns RGB by default on PiCamera2
     frame = picam2.capture_array()
+    
+    # ---------------------------------------------------------
+    # FIX COLOR ISSUE: Convert RGB to OpenCV's native BGR format. 
+    # This solves the issue where blue looks yellow/orange!
+    # ---------------------------------------------------------
+    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+    
     h, w = frame.shape[:2]
     frame_center_x = w // 2
 
@@ -90,7 +78,35 @@ while True:
         # If no line is found
         cv2.putText(frame, "No Line Detected", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-    cv2.imshow("Line Tracker", frame)
+    # ---------------------------------------------------------
+    # BLUE CUBE DETECTION
+    # ---------------------------------------------------------
+    # Convert whole frame to HSV to isolate the color blue
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    
+    # Define HSV color boundaries for Blue
+    lower_blue = np.array([90, 100, 50])
+    upper_blue = np.array([130, 255, 255])
+    
+    blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
+    blue_mask = cv2.GaussianBlur(blue_mask, (5, 5), 0)
+    
+    blue_contours, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Filter out small noise spots
+    valid_blues = [cnt for cnt in blue_contours if cv2.contourArea(cnt) > 1000]
+    
+    if valid_blues:
+        # Assume the largest blue object is our target cube
+        target_cube = max(valid_blues, key=cv2.contourArea)
+        cx_b, cy_b, cw, ch = cv2.boundingRect(target_cube)
+        
+        # Keep track of it by drawing a frame around it (Color format BGR -> 255, 0, 0 is Blue)
+        cv2.rectangle(frame, (cx_b, cy_b), (cx_b + cw, cy_b + ch), (255, 0, 0), 3)
+        cv2.putText(frame, "BLUE CUBE TRACKED", (cx_b, cy_b - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+
+    # Show the tracking result
+    cv2.imshow("Robot Vision", frame)
 
     if cv2.waitKey(1) == ord('q'):
         break
