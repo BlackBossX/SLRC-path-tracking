@@ -4,18 +4,19 @@ import sys
 
 # Define Pins (BCM Numbering)
 # Adjust these to match whichever sensor you want to test!
-TRIG_PIN = 24
-ECHO_PIN = 25
+TRIG_PIN = 23
+ECHO_PIN = 22
 
 def setup():
     GPIO.setmode(GPIO.BCM)
     GPIO.setwarnings(False)
 
     GPIO.setup(TRIG_PIN, GPIO.OUT)
-    GPIO.setup(ECHO_PIN, GPIO.IN)
+    # Force a pull-down resistor to prevent floating ghost triggers
+    GPIO.setup(ECHO_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
     # Initialize trigger to strictly False/Low
-    GPIO.output(TRIG_PIN, False)
+    GPIO.output(TRIG_PIN, GPIO.LOW)
     print("Waiting for sensor to settle...")
     time.sleep(1)
 
