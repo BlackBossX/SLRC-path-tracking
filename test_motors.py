@@ -1,6 +1,7 @@
 import RPi.GPIO as GPIO
 import time
 import sys
+import threading
 
 # Define GPIO pins (using BCM numbering based on your specs)
 # Motor A (Left)
@@ -13,14 +14,14 @@ PWMB = 16  # Software PWM
 BIN1 = 20
 BIN2 = 21
 
-# Encoders
-# Left Motor 
-ENC_A = 24
-ENC_B = 25
+# Setup
+# --- Left Encoder ---
+ENC_LEFT_A = 24
+ENC_LEFT_B = 25
 
-# Right Motor
-ENC_C = 8
-ENC_D = 7
+# --- Right Encoder ---
+ENC_RIGHT_A = 8
+ENC_RIGHT_B = 7
 
 # Global variables to store encoder counts
 left_encoder_count = 0
@@ -33,14 +34,14 @@ pwm_b = None
 def left_encoder_isr(channel):
     global left_encoder_count
     # Read the other pin to determine direction of rotation
-    if GPIO.input(ENC_B) == GPIO.HIGH:
+    if GPIO.input(ENC_LEFT_B) == GPIO.HIGH:
         left_encoder_count += 1
     else:
         left_encoder_count -= 1
 
 def right_encoder_isr(channel):
     global right_encoder_count
-    if GPIO.input(ENC_D) == GPIO.HIGH:
+    if GPIO.input(ENC_RIGHT_B) == GPIO.HIGH:
         right_encoder_count += 1
     else:
         right_encoder_count -= 1
@@ -55,7 +56,7 @@ def setup():
     GPIO.setup([PWMA, PWMB, AIN1, AIN2, BIN1, BIN2], GPIO.OUT)
 
     # Encoder pins setup (Inputs with pull-up resistors)
-    GPIO.setup([ENC_A, ENC_B, ENC_C, ENC_D], GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup([ENC_LEFT_A, ENC_LEFT_B, ENC_RIGHT_A, ENC_RIGHT_B], GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
     # Initialize PWM at 1000 Hz
     pwm_a = GPIO.PWM(PWMA, 1000)
@@ -65,8 +66,8 @@ def setup():
     pwm_b.start(0)
 
     # Attach hardware interrupts for encoders (Triggers on RISING edge)
-    GPIO.add_event_detect(ENC_A, GPIO.RISING, callback=left_encoder_isr)
-    GPIO.add_event_detect(ENC_C, GPIO.RISING, callback=right_encoder_isr)
+    GPIO.add_event_detect(ENC_LEFT_A, GPIO.RISING, callback=left_encoder_isr)
+    GPIO.add_event_detect(ENC_RIGHT_A, GPIO.RISING, callback=right_encoder_isr)
 
 def move_motors(speed_left, speed_right):
     """
@@ -105,46 +106,53 @@ def move_motors(speed_left, speed_right):
         GPIO.output(BIN2, GPIO.LOW)
         pwm_b.ChangeDutyCycle(0)
 
+# Thread function to continuously print encoders without blocking input
+def print_encoders_loop():
+    while True:
+        # Move cursor to a fixed row to update without scrolling wildly,
+        # or simply print it continuously. We will just print inline for simplicity, 
+        # but prepend carriage return to overwrite the same line if desired.
+        # Doing a simple continuous print for reliable output.
+        print(f"\r[Real-Time] Left ENC: {left_encoder_count} | Right ENC: {right_encoder_count}   ", end="", flush=True)
+        time.sleep(0.1)
 
 if __name__ == "__main__":
     setup()
-    print("Raspberry Pi Motor & Encoder Test Ready!")
-    print("Commands:")
-    print("  LF   - Left Motor Forward")
-    print("  LB   - Left Motor Backward")
-    print("  RF   - Right Motor Forward")
-    print("  RB   - Right Motor Backward")
-    print("  STOP - Stop all motors")
-    print("  ENC  - Print current encoder counts")
-    print("Press Ctrl+C to quit.")
+    
+    # Start the continuous encoder printing in a background thread
+    encoder_thread = threading.Thread(target=print_encoders_loop, daemon=True)
+    encoder_thread.start()
+
+    print("\n\nRaspberry Pi Motor & Encoder Test Ready!")
+    print("Commands: LF, LB, RF, RB, STOP")
+    print("Press Ctrl+C to quit.\n")
 
     try:
         while True:
             # We use python's built in input() to act like a serial monitor terminal
-            cmd = input("\nEnter command: ").strip().upper()
+            cmd = input("\n[CMD] -> ").strip().upper()
 
             if cmd == "LF":
-                print("Executing: Left Motor FORWARD (50% Speed)")
+                print(f"\nExecuting: Left Motor FORWARD")
                 move_motors(50, 0)
             elif cmd == "LB":
-                print("Executing: Left Motor BACKWARD (50% Speed)")
+                print(f"\nExecuting: Left Motor BACKWARD")
                 move_motors(-50, 0)
             elif cmd == "RF":
-                print("Executing: Right Motor FORWARD (50% Speed)")
+                print(f"\nExecuting: Right Motor FORWARD")
                 move_motors(0, 50)
             elif cmd == "RB":
-                print("Executing: Right Motor BACKWARD (50% Speed)")
+                print(f"\nExecuting: Right Motor BACKWARD")
                 move_motors(0, -50)
             elif cmd == "STOP":
-                print("Executing: STOP")
+                print(f"\nExecuting: STOP")
                 move_motors(0, 0)
-            elif cmd == "ENC":
-                print(f"Current Encoders -> Left: {left_encoder_count} | Right: {right_encoder_count}")
-            else:
-                print("Unknown command! Try: LF, LB, RF, RB, STOP, or ENC")
+            elif cmd != "":
+                print(f"\nUnknown command! Try: LF, LB, RF, RB, STOP")
 
     except KeyboardInterrupt:
         print("\nExiting gracefully. Stopping motors...")
         move_motors(0, 0)
         GPIO.cleanup()
         sys.exit(0)
+
