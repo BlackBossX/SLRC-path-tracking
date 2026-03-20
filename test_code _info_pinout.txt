@@ -1,0 +1,12 @@
+PWM A - 3
+A in1 - 1
+A in2 - 2
+
+PWM B - 5
+B in1 - 0
+B in2 - 4
+
+encoder A - 8 , 9
+encoder B - 6 , 7
+
+
