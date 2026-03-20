@@ -199,6 +199,10 @@ def main():
     print("Initializing Camera & Integration Logic...")
     picam2 = Picamera2()
     picam2.configure(picam2.create_preview_configuration(main={"size": (640, 480)}))
+    
+    # Reduce exposure to handle glare/reflection on the line
+    picam2.set_controls({"ExposureValue": -1.5})
+    
     picam2.start()
     
     print("Starting Robot! Press 'q' in the video window to quit.")
