@@ -1,0 +1,4 @@
+Gripper - Open (150*)
+	  Close (115*) - keep gripping 
+	  
+
