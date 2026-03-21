@@ -17,7 +17,6 @@ right_encoder_count = 0
 
 def left_encoder_isr(channel):
     global left_encoder_count
-    # Fallback to simple polling of B pin sinceBOTH edge trigger logic can be finicky on some Pi's
     if GPIO.input(ENC_LEFT_B) == GPIO.HIGH:
         left_encoder_count += 1
     else:

@@ -6,7 +6,6 @@ import cv2
 import numpy as np
 from picamera2 import Picamera2
 from collections import deque
-import serial
 
 # ==========================================
 # HARDWARE PIN DEFINITIONS
@@ -19,8 +18,13 @@ PWMB = 16
 BIN1 = 20
 BIN2 = 21
 
-# Encoders come via SERIAL Arduino, so we don't need GPIO for them anymore!
-# (Pins omitted for clarity)
+# --- Left Encoder ---
+ENC_LEFT_A = 14
+ENC_LEFT_B = 15
+
+# --- Right Encoder ---
+ENC_RIGHT_A = 17
+ENC_RIGHT_B = 27
 
 US_RIGHT_TRIG = 9
 US_RIGHT_ECHO = 10
@@ -67,11 +71,7 @@ class UltrasonicFilter:
 pwm_a = None
 pwm_b = None
 
-# Serial Encoder Globals
-raw_left_encoder = 0
-raw_right_encoder = 0
-left_encoder_offset = 0
-right_encoder_offset = 0
+# Encoder Globals
 left_encoder_count = 0
 right_encoder_count = 0
 
@@ -92,61 +92,31 @@ last_error = 0
 integral = 0
 
 # Rotation Constants from test_nav_rotate.py 
-TICKS_PER_DEGREE_LEFT = 1.80   
-TICKS_PER_DEGREE_RIGHT = 1.70  
+TICKS_PER_DEGREE_LEFT = 0.75   
+TICKS_PER_DEGREE_RIGHT = 0.75  
 
 running = True
 sensor_counter = 0
 
 # ==========================================
-# ISR & SENSOR & SERIAL THREADS
+# ISR & SENSOR THREADS
 # ==========================================
-def serial_read_thread():
-    global raw_left_encoder, raw_right_encoder
-    global left_encoder_count, right_encoder_count, running
-    
-    ports_to_try = ['/dev/serial0', '/dev/ttyS0', '/dev/ttyAMA0', '/dev/ttyUSB0', '/dev/ttyACM0']
-    arduino = None
-    
-    for port in ports_to_try:
-        try:
-            arduino = serial.Serial(port, 115200, timeout=1)
-            print(f"Successfully connected to Arduino encoders on {port}")
-            break
-        except Exception:
-            continue
-            
-    if arduino is None:
-        print("\nERROR: Could not find Arduino. Continuing visually, but rotation will fail.")
-    
-    while running:
-        if arduino:
-            try:
-                if arduino.in_waiting > 0:
-                    line = arduino.readline().decode('utf-8', errors='ignore').strip()
-                    if ',' in line:
-                        parts = line.split(',')
-                        if len(parts) == 2:
-                            try:
-                                raw_left_encoder = int(parts[0])
-                                raw_right_encoder = int(parts[1])
-                                left_encoder_count = raw_left_encoder - left_encoder_offset
-                                right_encoder_count = raw_right_encoder - right_encoder_offset
-                            except ValueError:
-                                pass
-                time.sleep(0.005)
-            except Exception:
-                pass
-        else:
-            time.sleep(1)
+def left_encoder_isr(channel):
+    global left_encoder_count
+    if GPIO.input(ENC_LEFT_B) == GPIO.HIGH:
+        left_encoder_count += 1
+    else:
+        left_encoder_count -= 1
+
+def right_encoder_isr(channel):
+    global right_encoder_count
+    if GPIO.input(ENC_RIGHT_B) == GPIO.HIGH:
+        right_encoder_count += 1
+    else:
+        right_encoder_count -= 1
 
 def reset_encoders():
-    global left_encoder_offset, right_encoder_offset
     global left_encoder_count, right_encoder_count
-    
-    left_encoder_offset = raw_left_encoder
-    right_encoder_offset = raw_right_encoder
-    
     left_encoder_count = 0
     right_encoder_count = 0
 
@@ -162,7 +132,10 @@ def setup_gpio():
     pwm_a.start(0)
     pwm_b.start(0)
 
-    # Note: Removed Pi encoder GPIO setup, utilizing Serial thread instead!
+    # Setup Encoder Pins
+    GPIO.setup([ENC_LEFT_A, ENC_LEFT_B, ENC_RIGHT_A, ENC_RIGHT_B], GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.add_event_detect(ENC_LEFT_A, GPIO.RISING, callback=left_encoder_isr)
+    GPIO.add_event_detect(ENC_RIGHT_A, GPIO.RISING, callback=right_encoder_isr)
 
     GPIO.setup([US_FRONT_TRIG, US_LEFT_TRIG, US_RIGHT_TRIG], GPIO.OUT)
     GPIO.setup([US_FRONT_ECHO, US_LEFT_ECHO, US_RIGHT_ECHO], GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
@@ -325,10 +298,6 @@ def main_loop():
     # Start ultrasonic thread
     s_thread = threading.Thread(target=sensor_thread_loop, daemon=True)
     s_thread.start()
-    
-    # Start Arduino serial thread (from test_nav_rotate.py)
-    ser_thread = threading.Thread(target=serial_read_thread, daemon=True)
-    ser_thread.start()
 
     print("Initializing Camera & Integration Logic (WHITE LINE)...")
     picam2 = Picamera2()
@@ -338,6 +307,7 @@ def main_loop():
 
     global last_error, integral
     last_known_error = 0
+    line_found_once = False
     
     initial_wall_distance = None
     object_found = False
@@ -401,6 +371,7 @@ def main_loop():
 
                 if area > 500:
                     line_detected = True
+                    line_found_once = True
                     M = cv2.moments(c)
                     if M["m00"] != 0:
                         cx = int(M["m10"] / M["m00"])
@@ -434,7 +405,11 @@ def main_loop():
                         cv2.line(frame, (frame_center_x, roi_start), (cx, cy + roi_start), (0, 0, 255), 2)
 
             if not line_detected:
-                if last_known_error < -100:
+                if not line_found_once:
+                    cv2.putText(frame, "START - GOING FORWARD", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 255), 2)
+                    left_motor_speed = BASE_SPEED
+                    right_motor_speed = BASE_SPEED
+                elif last_known_error < -100:
                     cv2.putText(frame, "LOST - SEEKING LEFT", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
                     left_motor_speed = -10
                     right_motor_speed = BASE_SPEED + 10
