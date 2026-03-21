@@ -265,17 +265,18 @@ def rotate_in_place(degrees, max_speed=28):
         print("Done rotating.\n")
         time.sleep(0.5)
 
-def get_stable_initial_distance(sensor_filter, samples=10, stable_threshold=5.0):
-    print("Sampling sensor for stable initial distance...")
+def get_stable_initial_distance(sensor_filter, name="sensor", samples=10, stable_threshold=5.0):
+    print(f"Sampling {name} for stable initial distance...")
     readings = []
     
     for i in range(samples):
         time.sleep(0.1)
         current_reading = sensor_filter.last_valid if sensor_filter.last_valid < 999 else None
         
-        if current_reading and current_reading < 100.0:
+        # Increased to 150 to allow detecting slightly further walls if placed differently
+        if current_reading and current_reading < 150.0:
             readings.append(current_reading)
-            print(f"  Sample {i+1}: {current_reading:.1f} cm")
+            print(f"  {name} Sample {i+1}: {current_reading:.1f} cm")
         
         if len(readings) >= 3:
             avg = sum(readings) / len(readings)
@@ -309,26 +310,37 @@ def main_loop():
     last_known_error = 0
     line_found_once = False
     
-    initial_wall_distance = None
+    initial_right_dist = None
+    initial_left_dist = None
     object_found = False
+    object_detected_side = None
     object_confirmation_count = 0
     need_confirmation = 3
 
-    print("Starting Robot! Searching for Initial Wall Distance on Right...")
+    print("Starting Robot! Searching for Initial Wall Distances on Both Sides...")
     time.sleep(2)
     
     try:
-        # Phase 1: Get stable initial reading
-        while initial_wall_distance is None:
-            temp_reading = get_stable_initial_distance(right_filter, samples=8)
+        # Phase 1: Get stable initial readings
+        while initial_right_dist is None:
+            temp_reading = get_stable_initial_distance(right_filter, name="RIGHT", samples=8)
             if temp_reading:
-                initial_wall_distance = temp_reading
-                print(f"\n---> RECORDED INITIAL WALL DISTANCE: {initial_wall_distance:.1f} cm <---\n")
+                initial_right_dist = temp_reading
+                print(f"\n---> RECORDED INITIAL RIGHT WALL DISTANCE: {initial_right_dist:.1f} cm <---\n")
             else:
-                print("Waiting for valid sensor reading...")
+                print("Waiting for valid RIGHT sensor reading...")
                 time.sleep(0.5)
 
-        print("Initial distance acquired. Now starting Line Tracking & Object Search...\n")
+        while initial_left_dist is None:
+            temp_reading = get_stable_initial_distance(left_filter, name="LEFT", samples=8)
+            if temp_reading:
+                initial_left_dist = temp_reading
+                print(f"\n---> RECORDED INITIAL LEFT WALL DISTANCE: {initial_left_dist:.1f} cm <---\n")
+            else:
+                print("Waiting for valid LEFT sensor reading...")
+                time.sleep(0.5)
+
+        print("Initial distances acquired. Now starting Line Tracking & Object Search...\n")
 
         # Phase 2 & 3: Track line while checking for objects
         while not object_found:
@@ -341,12 +353,21 @@ def main_loop():
             right_motor_speed = 0
             
             # Sub-check for object drops
-            if dist_right < (initial_wall_distance - 10.0):
+            current_detected_side = None
+            if dist_right < (initial_right_dist - 10.0):
+                current_detected_side = "RIGHT"
+            elif dist_left < (initial_left_dist - 10.0):
+                current_detected_side = "LEFT"
+
+            if current_detected_side:
                 object_confirmation_count += 1
                 if object_confirmation_count >= need_confirmation:
                     if not object_found:
-                        print(f"\n>>> OBJECT DETECTED! Current dist: {dist_right:.1f} cm, Initial dist: {initial_wall_distance:.1f} cm <<<")
+                        detected_dist = dist_right if current_detected_side == "RIGHT" else dist_left
+                        initial_dist = initial_right_dist if current_detected_side == "RIGHT" else initial_left_dist
+                        print(f"\n>>> OBJECT DETECTED ON {current_detected_side}! Current dist: {detected_dist:.1f} cm, Initial dist: {initial_dist:.1f} cm <<<")
                         object_found = True
+                        object_detected_side = current_detected_side
                         break
             else:
                 object_confirmation_count = max(0, object_confirmation_count - 1)
@@ -424,8 +445,8 @@ def main_loop():
 
             move_motors(left_motor_speed, right_motor_speed)
 
-            cv2.putText(frame, f"Initial Wall: {initial_wall_distance:.1f} cm", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
-            cv2.putText(frame, f"US Right: {dist_right:.1f} cm", (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            cv2.putText(frame, f"Initial Wall R:{initial_right_dist:.1f}  L:{initial_left_dist:.1f}", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            cv2.putText(frame, f"US Dist R:{dist_right:.1f}  L:{dist_left:.1f}", (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
             cv2.putText(frame, f"L_PWM: {int(left_motor_speed)} | R_PWM: {int(right_motor_speed)}", (20, 130), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
             
             cv2.imshow("Robot AI View", frame)
@@ -434,12 +455,15 @@ def main_loop():
         
         # --- OUTSIDE WHILE LOOP (If Object Was Found) ---
         if object_found:
-            print("\n*** FULL STOP - EXECUTING 90 DEGREE TURN ***")
+            print(f"\n*** FULL STOP - EXECUTING 90 DEGREE TURN ({object_detected_side}) ***")
             picam2.stop()
             cv2.destroyAllWindows()
             
-            # Using rotation logic borrowed explicitly from test_nav_rotate.py
-            rotate_in_place(90, max_speed=28)
+            # Using rotation logic based on which side the object was found
+            if object_detected_side == "RIGHT":
+                rotate_in_place(90, max_speed=28)
+            elif object_detected_side == "LEFT":
+                rotate_in_place(-90, max_speed=28)
 
     except KeyboardInterrupt:
         print("\nInterrupted by User")
