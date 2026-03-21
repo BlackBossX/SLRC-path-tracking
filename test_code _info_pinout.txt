@@ -1,9 +1,9 @@
 PWM A - 3
-A in1 - 1
+A in1 - 11
 A in2 - 2
 
 PWM B - 5
-B in1 - 0
+B in1 - 10
 B in2 - 4
 
 encoder A - 8 , 9
