@@ -5,8 +5,8 @@ import sys
 # Define Stepper Motor Pins (BCM)
 IN1 = 2
 IN2 = 3
-IN3 = 14
-IN4 = 15
+IN3 = 11
+IN4 = 26
 
 # Sequence for a standard 4-phase stepper motor (e.g., 28BYJ-48 with ULN2003)
 # This uses the half-step sequence for smoother rotation
