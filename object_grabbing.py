@@ -156,42 +156,84 @@ def init_arm():
     current_elbow = 90
     time.sleep(1.0)
 
-    print("Moving arm to folded/driving position before tracking...")
-    current_elbow = set_servo_angle_smooth(pwm_elbow, current_elbow, 50, step_delay=0.03)
-    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 100, step_delay=0.03)
-    current_gripper = set_servo_angle_smooth(pwm_gripper, current_gripper, 80, step_delay=0.03)
+    print("Moving arm to LANDING position initially before setting off...")
+    # Sequence: wrsit 180 > elbow 100 > gripper 120 > wrist 50 > elbow 150 > wrist 100
+    print("Pre-Initialize: Wrist to 180...")
+    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 180, step_delay=0.03)
     time.sleep(0.5)
+    
+    print("Pre-Initialize: Elbow to 100...")
+    current_elbow = set_servo_angle_smooth(pwm_elbow, current_elbow, 100, step_delay=0.03)
+    time.sleep(0.5)
+    
+    print("Pre-Initialize: Gripper to 120...")
+    current_gripper = set_servo_angle_smooth(pwm_gripper, current_gripper, 120, step_delay=0.03)
+    time.sleep(0.5)
+    
+    print("Pre-Initialize: Wrist to 50...")
+    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 50, step_delay=0.03)
+    time.sleep(0.5)
+    
+    print("Pre-Initialize: Elbow to 150...")
+    current_elbow = set_servo_angle_smooth(pwm_elbow, current_elbow, 150, step_delay=0.03)
+    time.sleep(0.5)
+
+    print("Pre-Initialize: Wrist to 100 (Final Standby Shape)...")
+    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 100, step_delay=0.03)
+    time.sleep(1.0)
+
+    # Release servo holding torque after initializing
+    pwm_elbow.ChangeDutyCycle(0)
+    pwm_wrist.ChangeDutyCycle(0)
+    pwm_gripper.ChangeDutyCycle(0)
+    print("Arm initialized and servos relaxed.")
 
 def grab_object():
     global current_elbow, current_wrist, current_gripper
-    print("\n*** EXECUTING NEW GRAB SEQUENCE ***")
+    print("\n*** EXECUTING GRAB SEQUENCE ***")
     
-    # --- PHASE 1: PRE-GRAB POSITION ---
-    print("Moving to PRE-GRAB positions...")
-    current_elbow = set_servo_angle_smooth(pwm_elbow, current_elbow, 80, step_delay=0.03)
-    time.sleep(0.2)
-    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 10, step_delay=0.03)
-    time.sleep(0.2)
-    current_gripper = set_servo_angle_smooth(pwm_gripper, current_gripper, 150, step_delay=0.03)
-    time.sleep(1.0)
-    
-    # --- PHASE 2: FINAL GRAB POSITION ---
-    # 1. Elbow gently drops to 50
-    print("Moving Elbow smoothly to 50...")
-    current_elbow = set_servo_angle_smooth(pwm_elbow, current_elbow, 50, step_delay=0.03)
+    print("Moving Elbow smoothly to 120...")
+    current_elbow = set_servo_angle_smooth(pwm_elbow, current_elbow, 120, step_delay=0.03)
     time.sleep(0.5)
     
-    # 2. Wrist moves to 100 
-    print("Moving Wrist smoothly to 100...")
-    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 100, step_delay=0.03)
+    print("Moving Wrist smoothly to 5...")
+    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 5, step_delay=0.03)
     time.sleep(0.5)
 
-    # 3. Gripper closes tightly to 80
     print("Moving Gripper safely to 80 (Holding)...")
     current_gripper = set_servo_angle_smooth(pwm_gripper, current_gripper, 80, step_delay=0.03)
     time.sleep(1.0)
+    print("Grab Sequence Complete!")
 
-    print("Grab Sequence Complete! Holding tension to prevent dropping.")
+def land_object():
+    global current_elbow, current_wrist, current_gripper
+    print("\n*** EXECUTING LANDING SEQUENCE ***")
+    
+    # Sequence: wrsit 180 > elbow 100 > gripper 120 > wrist 50 > elbow 150 > wrist 100
+    print("Moving Wrist smoothly to 180...")
+    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 180, step_delay=0.03)
+    time.sleep(0.5)
+    
+    print("Moving Elbow smoothly to 100...")
+    current_elbow = set_servo_angle_smooth(pwm_elbow, current_elbow, 100, step_delay=0.03)
+    time.sleep(0.5)
+    
+    print("Opening Gripper safely to 150 (Releasing)...")
+    current_gripper = set_servo_angle_smooth(pwm_gripper, current_gripper, 150, step_delay=0.03)
+    time.sleep(0.5)
+    
+    print("Moving Wrist smoothly to 50...")
+    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 50, step_delay=0.03)
+    time.sleep(0.5)
+    
+    print("Moving Elbow smoothly to 150 (Retracting)...")
+    current_elbow = set_servo_angle_smooth(pwm_elbow, current_elbow, 150, step_delay=0.03)
+    time.sleep(0.5)
+    
+    print("Moving Wrist smoothly to 100 (Final Rest)...")
+    current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 100, step_delay=0.03)
+    time.sleep(1.0)
+    print("Landing Sequence Complete!")
 
 # ==========================================
 # MAIN LOOP
@@ -258,25 +300,46 @@ def main_loop():
                         # Draw distance so you can see it on the monitor
                         cv2.putText(frame, f"Dist: {front_dist:.1f} cm", (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
 
-                        # Target distance is exactly 7cm
-                        if 0 < front_dist <= 7.0:
-                            print(f"\nObject is 7cm close! (Dist: {front_dist:.1f} cm) Stopping to execute arm.")
-                            move_motors(0, 0)
-                            
-                            # Turn off the camera feed before grabbing
-                            print("Turning off camera feed...")
-                            try:
-                                picam2.stop()
-                                cv2.destroyAllWindows()
-                            except:
-                                pass
+                        # Target distance is exactly 12cm
+                        if 0 < front_dist <= 12.0:
+                            # Before completely stopping to grab, verify we are CENTERED
+                            error = cx - frame_center_x
+                            if abs(error) > 25:
+                                # We are close but NOT centered. Pivot in place until centered!
+                                cv2.putText(frame, "CENTERING TO GRAB...", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 165, 255), 2)
+                                turn_adj_center = max(12, min(20, KP * abs(error) * 2)) # Ensure enough power to turn
+                                if error > 0:
+                                    left_motor_speed = turn_adj_center
+                                    right_motor_speed = -turn_adj_center
+                                else:
+                                    left_motor_speed = -turn_adj_center
+                                    right_motor_speed = turn_adj_center
+                            else:
+                                print(f"\nObject is 12cm close & CENTERED! Stopping to execute arm.")
+                                move_motors(0, 0)
                                 
-                            grab_object()
-                            object_grabbed = True
-                            break
+                                # Turn off the camera feed before grabbing
+                                print("Turning off camera feed...")
+                                try:
+                                    picam2.stop()
+                                    cv2.destroyAllWindows()
+                                except:
+                                    pass
+                                    
+                                grab_object()
+                                
+                                # Wait a moment after grabbing securely
+                                time.sleep(2.0)
+                                
+                                # Proceed with Landing immediately after for testing
+                                land_object()
+                                
+                                object_grabbed = True
+                                break
 
                         # PID tracking to align dead-center while driving towards it
-                        error = cx - frame_center_x
+                        if not object_grabbed and (front_dist > 12.0 or front_dist < 0):
+                            error = cx - frame_center_x
                         turn_adj = KP * error
                         
                         left_motor_speed = BASE_SPEED + turn_adj

@@ -1,2 +1,21 @@
-Elbow 120
+Elbow 150-50
+wrist 10  - 100
+
+gripper 150 - 80
+
+
+
+elbow gripping 125
+	release
+	
+wrist gripping 20
+	release 180
+
+gripper gripping 80
+	release 120
+	
+	
+	
+land on disk wrsit 180 > elbow 100 > gripper 120 >wrist 50 >elbow 150
+elbow 125 >  wrist 5 > gripping 80
 
