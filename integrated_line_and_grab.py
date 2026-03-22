@@ -519,6 +519,9 @@ def init_arm():
     pwm_wrist.ChangeDutyCycle(0)
     pwm_gripper.ChangeDutyCycle(0)
     print("Arm initialized and servos relaxed.\n")
+    
+    print("\nRotating Stepper Motor 100 steps anti-clockwise to set initial point...")
+    rotate_stepper(100, delay=0.002, direction=-1)
 
 def grab_object():
     global current_elbow, current_wrist, current_gripper
@@ -564,6 +567,12 @@ def land_object():
     print("Moving Wrist smoothly to 100 (Final Rest)...")
     current_wrist = set_servo_angle_smooth(pwm_wrist, current_wrist, 100, step_delay=0.03)
     time.sleep(1.0)
+    
+    # Release servo holding torque
+    pwm_elbow.ChangeDutyCycle(0)
+    pwm_wrist.ChangeDutyCycle(0)
+    pwm_gripper.ChangeDutyCycle(0)
+    
     print("Landing Sequence Complete!")
 
 # ==========================================
@@ -874,7 +883,7 @@ def main_loop():
                                 
                                 # Step: Rotate stepper motor clockwise 100 steps
                                 print("\nRotating Stepper Motor 100 steps clockwise...")
-                                rotate_stepper(100, delay=0.002, direction=1)
+                                rotate_stepper(300, delay=0.002, direction=1)
                                 
                                 print("\nMoving backward 2cm before turning...")
                                 move_backward_cm(2.0, max_speed=25)
