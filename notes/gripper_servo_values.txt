@@ -15,7 +15,8 @@ gripper gripping 80
 	release 120
 	
 	
-	
+	final :
+
 land on disk wrsit 180 > elbow 100 > gripper 120 >wrist 50 >elbow 150
-elbow 125 >  wrist 5 > gripping 80
+elbow 120 >  wrist 5 > gripping 80
 
