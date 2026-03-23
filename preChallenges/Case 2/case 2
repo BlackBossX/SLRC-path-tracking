@@ -1,0 +1,14 @@
+3141 (resistance)
+
+ID = 1
+P = 8862
+P_swap = 6288
+K = 3141
+A = ((6288 * 3) + K) mod 8750
+
+order = floor(A / 625) + 1
+remainder = A % 625
+x = floor(remainder / 25)
+y = remainder % 25
+
+

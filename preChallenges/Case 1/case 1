@@ -1,0 +1,12 @@
+payload (P) = 0 5194
+P_rev = 4915
+key (K) = 6180
+A = ((4915*7)+K) mod 10000
+
+order = floor(A / 625) + 1
+remainder = A % 625
+x = floor(remainder / 25)
+y = remainder % 25
+
+
+
